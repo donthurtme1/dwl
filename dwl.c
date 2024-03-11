@@ -32,6 +32,7 @@
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_keyboard_group.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr-layer-shell-unstable-v1-protocol.h>
 #include <wlr/types/wlr_linux_dmabuf_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
@@ -101,10 +102,8 @@ typedef struct {
 	const Arg arg;
 } Button;
 
-/* TODO use tree struct to make tree window arrangement */
-struct BinaryTree {
-	struct BinaryTree *prev;
-	struct BinaryTree *left, *right;
+struct bin_tree {
+	struct bin_tree *add, *split, *prev;
 };
 
 typedef struct Monitor Monitor;
@@ -118,7 +117,7 @@ typedef struct {
 	struct wlr_scene_tree *scene_surface;
 	struct wl_list link;
 	struct wl_list flink;
-	struct BinaryTree tlink;
+	struct bin_tree tlink; /* tree link */
 	union {
 		struct wlr_xdg_surface *xdg;
 		struct wlr_xwayland_surface *xwayland;
@@ -256,8 +255,8 @@ static void arrangelayer(Monitor *m, struct wl_list *list,
 		struct wlr_box *usable_area, int exclusive);
 static void arrangelayers(Monitor *m);
 static void axisnotify(struct wl_listener *listener, void *data);
-static void binary_tree_insert(struct BinaryTree *tree, struct BinaryTree *node);
 static void buttonpress(struct wl_listener *listener, void *data);
+//static void bin_tree_insert(struct bin_tree *tree, struct bin_tree *elm);
 static void chvt(const Arg *arg);
 static void checkidleinhibitor(struct wlr_surface *exclude);
 static void cleanup(void);
@@ -312,7 +311,6 @@ static void locksession(struct wl_listener *listener, void *data);
 static void maplayersurfacenotify(struct wl_listener *listener, void *data);
 static void mapnotify(struct wl_listener *listener, void *data);
 static void maximizenotify(struct wl_listener *listener, void *data);
-static void monocle(Monitor *m);
 static void motionabsolute(struct wl_listener *listener, void *data);
 static void motionnotify(uint32_t time);
 static void motionrelative(struct wl_listener *listener, void *data);
@@ -345,13 +343,13 @@ static void spawn(const Arg *arg);
 static void startdrag(struct wl_listener *listener, void *data);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
-static void togglebar(const Arg *arg);
+//static void togglebar(const Arg *arg);
 static void tile(Monitor *m);
+static void split(Monitor *m);
 static void togglefloating(const Arg *arg);
 static void togglefullscreen(const Arg *arg);
 static void toggletag(const Arg *arg);
-static void toggleview(const Arg *arg);
-static void tree4(Monitor *m);
+//static void toggleview(const Arg *arg);
 static void unlocksession(struct wl_listener *listener, void *data);
 static void unmaplayersurfacenotify(struct wl_listener *listener, void *data);
 static void unmapnotify(struct wl_listener *listener, void *data);
@@ -388,7 +386,7 @@ static struct wlr_xdg_activation_v1 *activation;
 static struct wlr_xdg_decoration_manager_v1 *xdg_decoration_mgr;
 static struct wl_list clients; /* tiling order */
 static struct wl_list fstack;  /* focus order */
-static struct BinaryTree tclients; /* tiling order for tree */
+static struct bin_tree tclients; /* tiling order for custom arrange function */
 static struct wlr_idle_notifier_v1 *idle_notifier;
 static struct wlr_idle_inhibit_manager_v1 *idle_inhibit_mgr;
 static struct wlr_layer_shell_v1 *layer_shell;
@@ -578,19 +576,6 @@ void axisnotify(struct wl_listener *listener, void *data) {
 			event->delta_discrete, event->source);
 }
 
-void binary_tree_insert(struct BinaryTree *tree, struct BinaryTree *node) {
-	/* Breadth first search to find empty next pointer (right to left) */
-	struct BinaryTree *cur = tree;
-	Client *c;
-
-	while (cur->right) {
-		cur = cur->right;
-	}
-	cur->right = (struct BinaryTree *)malloc(sizeof(struct BinaryTree));
-	c = wl_container_of(cur, c, tlink);
-	c->tlink = *c->tlink.left;
-}
-
 void buttonpress(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_button_event *event = data;
 	struct wlr_keyboard *keyboard;
@@ -642,6 +627,24 @@ void buttonpress(struct wl_listener *listener, void *data) {
 	 * pointer focus that a button press has occurred */
 	wlr_seat_pointer_notify_button(seat,
 			event->time_msec, event->button, event->state);
+}
+
+static void bin_tree_insert(struct bin_tree *tree, struct bin_tree *elm) {
+	struct bin_tree *node;
+	elm->add = NULL;
+	elm->split = NULL;
+
+	if (tree->add == NULL) {
+		tree->add = elm;
+		elm->prev = tree;
+		return;
+	}
+	node = tree;
+	while (node->split != NULL) {
+		node = node->split;
+	}
+	node->split = elm;
+	elm->prev = node;
 }
 
 void chvt(const Arg *arg) {
@@ -1162,7 +1165,7 @@ void dwl_ipc_manager_bind(struct wl_client *client, void *data, uint32_t version
 
 	zdwl_ipc_manager_v2_send_tags(manager_resource, TAGCOUNT);
 
-	for (int i = 0; i < LENGTH(layouts); i++)
+	for (unsigned int i = 0; i < LENGTH(layouts); i++)
 		zdwl_ipc_manager_v2_send_layout(manager_resource, layouts[i].symbol);
 }
 
@@ -1614,7 +1617,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 
 void mapnotify(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
-	Client *p = NULL;
+	Client *p = NULL, *sel = focustop(selmon);
 	Client *w, *c = wl_container_of(listener, c, map);
 	Monitor *m;
 	int i;
@@ -1654,8 +1657,13 @@ void mapnotify(struct wl_listener *listener, void *data) {
 	c->geom.height += 2 * c->bw;
 
 	/* Insert this client into client lists. */
-	wl_list_insert(&clients, &c->link);
-	//binary_tree_insert(&tclients, &c->tlink);
+	if (sel) {
+		wl_list_insert(&(sel->link), &c->link);
+		//bin_tree_insert(&(sel->tlink), &c->tlink);
+	} else {
+		wl_list_insert(&clients, &c->link);
+		//bin_tree_insert(&tclients, &c->tlink);
+	}
 	wl_list_insert(&fstack, &c->flink);
 
 	/* Set initial monitor, tags, floating status, and focus:
@@ -1691,22 +1699,6 @@ void maximizenotify(struct wl_listener *listener, void *data) {
 	if (wl_resource_get_version(c->surface.xdg->toplevel->resource)
 			< XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
 		wlr_xdg_surface_schedule_configure(c->surface.xdg);
-}
-
-void monocle(Monitor *m) {
-	Client *c;
-	int n = 0;
-
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
-			continue;
-		resize(c, m->w, 0);
-		n++;
-	}
-	if (n)
-		snprintf(m->ltsymbol, LENGTH(m->ltsymbol), "[%d]", n);
-	if ((c = focustop(m)))
-		wlr_scene_node_raise_to_top(&c->scene->node);
 }
 
 void motionabsolute(struct wl_listener *listener, void *data) {
@@ -2089,12 +2081,22 @@ void run(char *startup_cmd) {
 	wlr_cursor_warp_closest(cursor, NULL, cursor->x, cursor->y);
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
 
+	if (fork() == 0) {
+		execvp("/usr/local/bin/wbg", wbg_argv);
+		die("startup: wbg");
+	}
+	if (fork() == 0) {
+		execvp("/usr/local/bin/dwlb", dwlb_argv);
+		die("startup: dwlb");
+	}
+
+
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
 	 * loop configuration to listen to libinput events, DRM events, generate
 	 * frame events at the refresh rate, and so on. */
 	wl_display_run(dpy);
-	execv("/bin/swaybg", swaybg_argv);
+	//execvp("/usr/bin/swaybg", swaybg_argv);
 }
 
 void setcursor(struct wl_listener *listener, void *data) {
@@ -2526,7 +2528,7 @@ void tile(Monitor *m) {
 	unsigned int ms, my, ty;
 	unsigned int width  = m->w.width - (2 * msep),
 				 height = m->w.height - (wsep + msep),
-				 x = m->w.x + msep, y = m->w.y + wsep;
+				 x = m->w.x + msep, y = m->w.y + msep;
 	int i, n = 0;
 	Client *c;
 
@@ -2563,12 +2565,38 @@ void tile(Monitor *m) {
 	}
 }
 
-void
-togglebar(const Arg *arg) {
+void split(Monitor *m) {
+	Client *c, *sel = focustop(selmon); /* Selected window. */
+	int n = 0, splits = 0, adds = 0;
+
+	wl_list_for_each(c, &clients, link)
+		if (VISIBLEON(c, m) && !c->isfloating && !c->isfullscreen)
+			n++;
+	if (n == 0)
+		return;
+
+	for (c = wl_container_of(tclients.split, c, tlink);
+		 c != NULL;
+		 c = wl_container_of(c->tlink.split, c, tlink)) {
+		
+		adds = 0;
+		for (c = wl_container_of(tclients.add, c, tlink);
+			 c != NULL;
+			 c = wl_container_of(c->tlink.add, c, tlink)) {
+
+			adds++;
+		}
+		splits++;
+	}
+}
+
+/*
+void togglebar(const Arg *arg) {
 	DwlIpcOutput *ipc_output;
 	wl_list_for_each(ipc_output, &selmon->dwl_ipc_outputs, link)
 		zdwl_ipc_output_v2_send_toggle_visibility(ipc_output->resource);
 }
+*/
 
 void togglefloating(const Arg *arg) {
 	Client *sel = focustop(selmon);
@@ -2604,24 +2632,6 @@ void toggleview(const Arg *arg) {
 	focusclient(focustop(selmon), 1);
 	arrange(selmon);
 	printstatus();
-}
-
-void tree4(Monitor *m) {
-	int n = 0;
-	Client *c;
-
-	wl_list_for_each(c, &clients, link)
-		if (VISIBLEON(c, m) && !c->isfloating && !c->isfullscreen)
-			n++;
-	if (n == 0)
-		return;
-
-    wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
-			continue;
-		resize(c, (struct wlr_box){ .x = m->w.x, .y = m->w.y,
-				.width = m->w.width, .height = m->w.height }, 0);
-    }
 }
 
 void unlocksession(struct wl_listener *listener, void *data) {

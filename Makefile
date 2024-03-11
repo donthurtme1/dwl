@@ -42,8 +42,6 @@ dwl-ipc-unstable-v2-protocol.c:
 	$(WAYLAND_SCANNER) private-code \
 		protocols/dwl-ipc-unstable-v2.xml $@
 
-config.h:
-	cp config.def.h $@
 clean:
 	rm -f dwl *.o *-protocol.h
 
