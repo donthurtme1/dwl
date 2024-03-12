@@ -17,7 +17,7 @@ static const float focuscolor[]            = COLOR(0x908caa77); /* rose: 0xebbcb
 static const float urgentcolor[]           = COLOR(0xeb6f9299); /* love: 0xeb6f92dd */
 /* To conform the xdg-protocol, set the alpha to zero to restore the old behavior */
 static const float fullscreen_bg[]         = {0.1f, 0.1f, 0.1f, 1.0f}; /* You can also use glsl colors */
-static char *const wbg_argv[]			   = { "/usr/local/bin/wbg", "/home/basil/images/fishies1.jpg", NULL };
+static char *const wbg_argv[]			   = { "/usr/local/bin/wbg", "/home/basil/images/fishies-cropped.jpg", NULL };
 static char *const dwlb_argv[]			   = { "dwlb", NULL };
 
 /* tagging - TAGCOUNT must be no greater than 31 */
