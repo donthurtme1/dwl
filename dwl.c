@@ -629,6 +629,7 @@ void buttonpress(struct wl_listener *listener, void *data) {
 			event->time_msec, event->button, event->state);
 }
 
+/*
 static void bin_tree_insert(struct bin_tree *tree, struct bin_tree *elm) {
 	struct bin_tree *node;
 	elm->add = NULL;
@@ -646,6 +647,7 @@ static void bin_tree_insert(struct bin_tree *tree, struct bin_tree *elm) {
 	node->split = elm;
 	elm->prev = node;
 }
+*/
 
 void chvt(const Arg *arg) {
 	wlr_session_change_vt(session, arg->ui);
@@ -1772,7 +1774,7 @@ void motionrelative(struct wl_listener *listener, void *data) {
 	 * special configuration applied for the specific input device which
 	 * generated the event. You can pass NULL for the device if you want to move
 	 * the cursor around without any input. */
-	wlr_cursor_move(cursor, &event->pointer->base, event->delta_x, event->delta_y);
+	wlr_cursor_move(cursor, &event->pointer->base, event->delta_x / mouse_sens, event->delta_y / mouse_sens);
 	motionnotify(event->time_msec);
 }
 
@@ -2096,7 +2098,6 @@ void run(char *startup_cmd) {
 	 * loop configuration to listen to libinput events, DRM events, generate
 	 * frame events at the refresh rate, and so on. */
 	wl_display_run(dpy);
-	//execvp("/usr/bin/swaybg", swaybg_argv);
 }
 
 void setcursor(struct wl_listener *listener, void *data) {
@@ -2566,7 +2567,8 @@ void tile(Monitor *m) {
 }
 
 void split(Monitor *m) {
-	Client *c, *sel = focustop(selmon); /* Selected window. */
+	//Client *sel = focustop(selmon)
+	Client *c; /* Selected window. */
 	int n = 0, splits = 0, adds = 0;
 
 	wl_list_for_each(c, &clients, link)
@@ -2588,6 +2590,9 @@ void split(Monitor *m) {
 		}
 		splits++;
 	}
+	/* Stop lsp from complaining, temporary. */
+	splits = adds + 1;
+	adds = splits + 1;
 }
 
 /*
