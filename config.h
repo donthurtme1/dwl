@@ -17,8 +17,10 @@ static const float focuscolor[]            = COLOR(0x908caa77); /* rose: 0xebbcb
 static const float urgentcolor[]           = COLOR(0xeb6f9299); /* love: 0xeb6f92dd */
 /* To conform the xdg-protocol, set the alpha to zero to restore the old behavior */
 static const float fullscreen_bg[]         = {0.1f, 0.1f, 0.1f, 1.0f}; /* You can also use glsl colors */
-static char *const wbg_argv[]			   = { "/usr/local/bin/wbg", "/home/basil/images/guitar-girl-cropped.png", NULL };
-static char *const dwlb_argv[]			   = { "dwlb", NULL };
+static char *const wbg_argv[]			   = { "/usr/local/bin/wbg", "/home/basil/images/jelly-fish-space-fix.png", NULL };
+static char *const waybar_argv[]		   = { "waybar", NULL };
+static char *const firefox_argv[]		   = { "firefox", NULL };
+static char *const discord_argv[]		   = { "discord", "--enable-features=UseOzonePlatform", "--ozone-platform=wayland", NULL };
 static const unsigned int mouse_sens = 16;
 
 /* tagging - TAGCOUNT must be no greater than 31 */
@@ -120,6 +122,7 @@ static const char *menucmd[] = { "wofi", NULL };
 static const char *grimcmd[] = { "/usr/local/bin/grimctl", NULL };
 static const char *decrease_volume[] = { "/usr/bin/pactl", "set-sink-volume", "0", "-5%", NULL };
 static const char *increase_volume[] = { "/usr/bin/pactl", "set-sink-volume", "0", "+5%", NULL };
+static const char *toggle_waybar[] = { "killall", "-SIGUSR1", "waybar" };
 
 static const Key keys[] = {
 	/* Note that Shift changes certain key codes: c -> C, 2 -> at, etc. */
@@ -129,6 +132,7 @@ static const Key keys[] = {
 	{ MODKEY,                    XKB_KEY_y,			 spawn,            {.v = grimcmd} },
 	{ MODKEY,                    XKB_KEY_minus,		 spawn,            {.v = decrease_volume} },
 	{ MODKEY,                    XKB_KEY_equal,		 spawn,            {.v = increase_volume} },
+	{ MODKEY,                    XKB_KEY_space,		 spawn,            {.v = toggle_waybar} },
 	{ MODKEY,                    XKB_KEY_j,          focusstack,       {.i =  1} },
 	{ MODKEY,                    XKB_KEY_k,          focusstack,       {.i = -1} },
 	{ MODKEY,                    XKB_KEY_bracketleft,          incnmaster,       {.i =  1} },

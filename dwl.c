@@ -439,6 +439,19 @@ static xcb_atom_t netatom[NetLast];
 /* attempt to encapsulate suck into one file */
 #include "client.h"
 
+char *concat(const char *restrict start, const char *restrict end) {
+	int start_size = 0, end_size = 0, i = 0;
+	char *s;
+	while (start[++start_size]) { };	/* Pre increment excludes null terminator. */
+	while (end[end_size++]) { };		/* Post increment includes the null terminator. */
+
+	s = (char *)malloc(start_size + end_size);
+	for (; i < start_size; i++) { s[i] = start[i]; }
+	i = 0;
+	for (; i < end_size; i++) { s[start_size + i] = end[i]; }
+	return s;
+}
+
 /* function implementations */
 void applybounds(Client *c, struct wlr_box *bbox) {
 	/* set minimum possible */
@@ -867,6 +880,9 @@ void createmon(struct wl_listener *listener, void *data) {
 	size_t i;
 	struct wlr_output_state state;
 	Monitor *m;
+	// My variables.
+	struct wlr_output_mode *preferred_mode = wlr_output_preferred_mode(wlr_output);
+	FILE *dwloutput;
 
 	if (!wlr_output_init_render(wlr_output, alloc, drw))
 		return;
@@ -895,11 +911,23 @@ void createmon(struct wl_listener *listener, void *data) {
 		}
 	}
 
+	preferred_mode = wlr_output_preferred_mode(wlr_output);
 	/* The mode is a tuple of (width, height, refresh rate), and each
 	 * monitor supports only a specific set of modes. We just pick the
 	 * monitor's preferred mode; a more sophisticated compositor would let
 	 * the user configure it. */
 	wlr_output_state_set_mode(&state, wlr_output_preferred_mode(wlr_output));
+
+	if (wlr_output->name[0] != 'd') {
+		state.mode->refresh = 144000;
+	}
+
+	dwloutput = fopen(concat("/home/basil/", wlr_output->name), "w");
+	fprintf(dwloutput, "%s: %dx%d @ %d, %d, %d\n", wlr_output->name,
+			preferred_mode->width, preferred_mode->height, preferred_mode->refresh,
+			preferred_mode->preferred, preferred_mode->picture_aspect_ratio);
+	fprintf(dwloutput, "State Mode: %dx%d @ %d\n",
+			state.mode->width, state.mode->height, state.mode->refresh);
 
 	/* Set up event listeners */
 	LISTEN(&wlr_output->events.frame, &m->frame, rendermon);
@@ -909,6 +937,10 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_output_state_set_enabled(&state, 1);
 	wlr_output_commit_state(wlr_output, &state);
 	wlr_output_state_finish(&state);
+
+	fprintf(dwloutput, "Output Mode: %dx%d @ %d\n", wlr_output->current_mode->width,
+			wlr_output->current_mode->height, wlr_output->current_mode->refresh);
+	fclose(dwloutput);
 
 	wl_list_insert(&mons, &m->link);
 	printstatus();
@@ -2084,12 +2116,20 @@ void run(char *startup_cmd) {
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
 
 	if (fork() == 0) {
-		execvp("/usr/local/bin/wbg", wbg_argv);
+		execvp("wbg", wbg_argv);
 		die("startup: wbg");
 	}
 	if (fork() == 0) {
-		execvp("/usr/local/bin/dwlb", dwlb_argv);
-		die("startup: dwlb");
+		execvp("waybar", waybar_argv);
+		die("startup: waybar");
+	}
+	if (fork() == 0) {
+		execvp("firefox", firefox_argv);
+		die("startup: firefox");
+	}
+	if (fork() == 0) {
+		execvp("discord", discord_argv);
+		die("startup: discord");
 	}
 
 
@@ -2925,8 +2965,6 @@ void configurex11(struct wl_listener *listener, void *data) {
 	if (c->isfloating || client_is_unmanaged(c))
 		resize(c, (struct wlr_box){.x = event->x, .y = event->y,
 				.width = event->width, .height = event->height}, 0);
-	else
-		arrange(c->mon);
 }
 
 void createnotifyx11(struct wl_listener *listener, void *data) {
