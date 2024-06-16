@@ -24,9 +24,9 @@ static char *const discord_argv[]		   = { "discord", "--enable-features=UseOzone
 static const unsigned int mouse_sens = 16;
 
 /* scenefx variables */
-static const int opacity = 1; /* flag to enable opacity */
-static const float opacity_inactive = 0.5;
-static const float opacity_active = 1.0;
+static const int opacity = 0; /* flag to enable opacity */
+static const float opacity_inactive = 0.95f;
+static const float opacity_active = 1.0f;
 
 static const int shadow = 0; /* flag to enable shadow */
 static const int shadow_only_floating = 0; /* only apply shadow to floating windows */
@@ -36,7 +36,7 @@ static const int shadow_blur_sigma = 20;
 static const int shadow_blur_sigma_focus = 40;
 static const char *const shadow_ignore_list[] = { "xdg-desktop-portal-gtk", NULL }; /* list of app-id to ignore */
 
-static const int corner_radius = 10; /* 0 disables corner_radius */
+static const int corner_radius = 1; /* 0 disables corner_radius */
 
 /*static const int blur = 1;
 static const int blur_optimized = 1;
